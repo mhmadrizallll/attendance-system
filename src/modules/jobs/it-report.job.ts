@@ -1,7 +1,7 @@
 import cron from "node-cron";
 import { sendItReportByDate } from "../report/it-report.service";
 
-cron.schedule("33 11 * * *", async () => {
+cron.schedule("0 8 * * *", async () => {
   try {
     const now = new Date();
 

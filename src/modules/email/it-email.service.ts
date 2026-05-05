@@ -94,7 +94,7 @@ export async function sendItReport(
     // =====================
     // PULANG (>=16:30)
     // =====================
-    if (timeValue >= 990) {
+    if (timeValue >= 900) {
       if (!user.checkOut || dateObj > user.checkOut) {
         user.checkOut = dateObj;
       }
@@ -218,16 +218,18 @@ export async function sendItReport(
                   .join("")
               : `
               <tr>
-                <td colspan="4">Tidak ada data</td>
+                <td colspan="4" style="padding:15px; border:1px solid #ddd; color:red;">
+                  Tidak ada aktivitas (libur / tidak ada absen)
+                </td>
               </tr>
             `
           }
         </tbody>
       </table>
 
-      <p style="text-align:center; font-size:12px; margin-top:20px;">
+      <div style="text-align:center; margin-top:20px; font-size:11px; color:#95a5a6;">
         Generated automatically by IT Software Dept
-      </p>
+      </div>
     </div>
   </div>
   `;
@@ -238,6 +240,7 @@ export async function sendItReport(
   await transporter.sendMail({
     from: `<${process.env.SMTP_USER}>`,
     to: toEmails,
+    cc: ["weitse.hung@pt-richshoes.com"],
     subject: `Daily Attendance Report - ${reportDate}`,
     html,
     attachments: [

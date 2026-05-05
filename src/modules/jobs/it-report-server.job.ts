@@ -2,7 +2,7 @@ import cron from "node-cron";
 import { sendReportByDate } from "../report/it-report-server.service";
 
 cron.schedule(
-  "33 11 * * *",
+  "0 8 * * *",
   async () => {
     console.log("🔔 GENERATE IT REPORT...");
 
