@@ -7,7 +7,7 @@ function parseZKTime(time: string) {
   return new Date(time + " GMT+0700");
 }
 
-// ✅ Helper chunk (biar gak kena limit PostgreSQL)
+// ✅ Helper chunk
 function chunkArray(array: any[], size: number) {
   const result = [];
   for (let i = 0; i < array.length; i += size) {
@@ -49,7 +49,6 @@ export async function syncDevice(device: any) {
       const uid = String(log.deviceUserId || "");
       const recordTime = log.recordTime;
 
-      // ❌ skip invalid
       if (!uid || uid === "0" || !recordTime) {
         invalidCount++;
         continue;
@@ -57,7 +56,6 @@ export async function syncDevice(device: any) {
 
       const parsedDate = parseZKTime(recordTime);
 
-      // 👤 get user dari cache
       let user = userMap.get(uid);
 
       if (!user) {
@@ -85,22 +83,41 @@ export async function syncDevice(device: any) {
 
     totalPrepared = insertData.length;
 
-    // 🔥 BATCH INSERT (ANTI ERROR POSTGRES)
     const chunks = chunkArray(insertData, 500);
 
     for (const chunk of chunks) {
+      // ✅ insert → ambil ID aja
       const inserted = await db("attendances")
         .insert(chunk)
         .onConflict(["device_id", "device_user_id", "timestamp"])
         .ignore()
-        .returning("*");
+        .returning(["id"]);
 
       totalInserted += inserted.length;
       totalDuplicate += chunk.length - inserted.length;
 
-      // 🚀 Emit per batch (lebih aman dari spam)
+      // ✅ JOIN ke users biar dapet name
       if (inserted.length > 0) {
-        io.emit("attendance:batch", inserted);
+        const ids = inserted.map((i: any) => i.id);
+
+        const fullData = await db("attendances as a")
+          .join("users as u", "a.user_id", "u.id")
+          .select("a.device_id", "a.device_user_id", "a.timestamp", "u.name")
+          .whereIn("a.id", ids);
+
+        const formatted = fullData.map((item: any) => {
+          const dt = new Date(item.timestamp);
+
+          return {
+            device_id: item.device_id,
+            device_user_id: item.device_user_id,
+            name: item.name,
+            date: dt.toISOString().split("T")[0], // YYYY-MM-DD
+            time: dt.toTimeString().split(" ")[0], // HH:mm:ss
+          };
+        });
+        // 🚀 kirim ke frontend
+        io.emit("attendance:batch", formatted);
       }
     }
 
@@ -111,7 +128,6 @@ export async function syncDevice(device: any) {
     console.log("❌ INVALID:", invalidCount);
     console.log("=================================\n");
 
-    // ✅ update device status aja (jangan pakai last_sync buat filter)
     await db("devices").where({ id: device.id }).update({
       status: "online",
       last_sync: new Date(),
@@ -121,7 +137,9 @@ export async function syncDevice(device: any) {
   } catch (err) {
     console.error("❌ SYNC ERROR:", err);
 
-    await db("devices").where({ id: device.id }).update({ status: "offline" });
+    await db("devices").where({ id: device.id }).update({
+      status: "offline",
+    });
 
     try {
       await zk.disconnect();
