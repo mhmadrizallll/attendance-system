@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { addDevice } from "./device.controller";
+import { addDevice, getDevicesController } from "./device.controller";
 import db from "../../config/db";
 import { syncDevice } from "./device.service";
 
@@ -16,5 +16,7 @@ router.get("/sync-now", async (req, res) => {
 
   res.json({ message: "sync done" });
 });
+
+router.get("/", getDevicesController);
 
 export default router;

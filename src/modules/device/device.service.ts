@@ -1,6 +1,7 @@
 import ZKLib from "node-zklib";
 import db from "../../config/db";
 import { getIO } from "../../realtime/socket";
+import { getDepartment } from "../../utils/departement";
 
 // ✅ Parse waktu ZKTeco → paksa WIB
 function parseZKTime(time: string) {
@@ -63,6 +64,7 @@ export async function syncDevice(device: any) {
           .insert({
             device_user_id: uid,
             name: `User ${uid}`,
+            department: getDepartment(uid), // ✅ tambah
           })
           .returning("*");
 
@@ -102,7 +104,13 @@ export async function syncDevice(device: any) {
 
         const fullData = await db("attendances as a")
           .join("users as u", "a.user_id", "u.id")
-          .select("a.device_id", "a.device_user_id", "a.timestamp", "u.name")
+          .select(
+            "a.device_id",
+            "a.device_user_id",
+            "a.timestamp",
+            "u.name",
+            "u.department",
+          )
           .whereIn("a.id", ids);
 
         const formatted = fullData.map((item: any) => {
@@ -112,8 +120,9 @@ export async function syncDevice(device: any) {
             device_id: item.device_id,
             device_user_id: item.device_user_id,
             name: item.name,
-            date: dt.toISOString().split("T")[0], // YYYY-MM-DD
-            time: dt.toTimeString().split(" ")[0], // HH:mm:ss
+            department: item.department, // ✅ tambah
+            date: dt.toISOString().split("T")[0],
+            time: dt.toTimeString().split(" ")[0],
           };
         });
         // 🚀 kirim ke frontend
@@ -145,4 +154,8 @@ export async function syncDevice(device: any) {
       await zk.disconnect();
     } catch {}
   }
+}
+
+export async function getDevices() {
+  return db("devices").select("id", "name");
 }

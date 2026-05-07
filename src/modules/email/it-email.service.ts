@@ -239,8 +239,9 @@ export async function sendItReport(
   // =========================
   await transporter.sendMail({
     from: `<${process.env.SMTP_USER}>`,
-    to: toEmails,
-    cc: ["weitse.hung@pt-richshoes.com"],
+    to: ["it.rizal@pt-longwell.com"],
+    // to: toEmails,
+    // cc: ["weitse.hung@pt-richshoes.com"],
     subject: `Daily Attendance Report - ${reportDate}`,
     html,
     attachments: [

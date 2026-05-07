@@ -1,5 +1,6 @@
 import ZKLib from "node-zklib";
 import db from "../../config/db";
+import { getDepartment } from "../../utils/departement";
 
 export async function syncUsersFromDevice(device: any) {
   const zk = new ZKLib(device.ip_address, device.port, 10000, 4000);
@@ -9,34 +10,65 @@ export async function syncUsersFromDevice(device: any) {
 
     const result = await zk.getUsers();
 
-    // 🔥 TARUH DI SINI
-    // console.log("RAW USERS:");
-    // console.dir(result, { depth: null });
-
     const users = result?.data || [];
 
-    // console.log("TOTAL USERS:", users.length);
-
-    // 🔥 LIHAT 5 DATA PERTAMA
-    // console.dir(users.slice(0, 5), { depth: null });
+    console.log("TOTAL USERS:", users.length);
 
     for (const u of users) {
-      const deviceUserId = u.userId;
+      const deviceUserId = String(u.userId || "");
 
       if (!deviceUserId) continue;
 
-      await db("users")
-        .insert({
+      // 🔥 cek user lama
+      const existingUser = await db("users")
+        .where({
           device_user_id: deviceUserId,
-          name: u.name || `User ${deviceUserId}`,
-          card_number: u.cardno || null,
         })
-        .onConflict("device_user_id")
-        .merge();
+        .first();
+
+      // 🔥 kalau user sudah ada
+      // SKIP TOTAL
+      if (existingUser) {
+        // console.log(`⏭️ SKIP USER: ${deviceUserId}`);
+
+        continue;
+      }
+
+      // 🔥 raw name dari mesin
+      const rawMachineName = u.name?.trim() || "";
+
+      // 🔥 detect dummy name
+      const isDummyName =
+        rawMachineName === "" ||
+        rawMachineName === deviceUserId ||
+        rawMachineName === `User ${deviceUserId}` ||
+        /^\d+$/.test(rawMachineName);
+
+      // 🔥 final name
+      const finalName = isDummyName ? `User ${deviceUserId}` : rawMachineName;
+
+      // 🔥 insert ONLY
+      await db("users").insert({
+        device_user_id: deviceUserId,
+
+        name: finalName,
+
+        card_number: u.cardno || null,
+
+        department: getDepartment(deviceUserId),
+      });
+
+      console.log(`✅ INSERT USER: ${deviceUserId} - ${finalName}`);
     }
+
+    console.log("✅ USERS SYNC SUCCESS");
 
     await zk.disconnect();
   } catch (err) {
     console.error("SYNC USERS ERROR:", err);
+
+    try {
+      await zk.disconnect();
+    } catch {}
   }
 }
