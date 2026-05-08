@@ -11,9 +11,11 @@ function parseZKTime(time: string) {
 // ✅ Helper chunk
 function chunkArray(array: any[], size: number) {
   const result = [];
+
   for (let i = 0; i < array.length; i += size) {
     result.push(array.slice(i, i + size));
   }
+
   return result;
 }
 
@@ -24,6 +26,7 @@ export async function syncDevice(device: any) {
     await zk.createSocket();
 
     const result = await zk.getAttendances();
+
     const rawLogs = result?.data || [];
 
     console.log("\n========================");
@@ -37,11 +40,22 @@ export async function syncDevice(device: any) {
     let totalPrepared = 0;
     let totalInserted = 0;
     let totalDuplicate = 0;
+    let totalSkippedDeleted = 0;
 
-    // 🔥 ambil semua user sekali
-    const users = await db("users").select("*");
+    // ✅ Ambil user aktif saja
+    const users = await db("users").whereNull("deleted_at").select("*");
+
     const userMap = new Map(
       users.map((u: any) => [String(u.device_user_id), u]),
+    );
+
+    // ✅ Ambil semua user soft delete
+    const deletedUsers = await db("users")
+      .whereNotNull("deleted_at")
+      .select("device_user_id");
+
+    const deletedSet = new Set(
+      deletedUsers.map((u: any) => String(u.device_user_id)),
     );
 
     const insertData: any[] = [];
@@ -50,8 +64,18 @@ export async function syncDevice(device: any) {
       const uid = String(log.deviceUserId || "");
       const recordTime = log.recordTime;
 
+      // ❌ invalid data
       if (!uid || uid === "0" || !recordTime) {
         invalidCount++;
+        continue;
+      }
+
+      // ❌ user soft delete → skip attendance
+      if (deletedSet.has(uid)) {
+        totalSkippedDeleted++;
+
+        console.log(`⛔ SKIP ATTENDANCE (deleted user): ${uid}`);
+
         continue;
       }
 
@@ -59,19 +83,22 @@ export async function syncDevice(device: any) {
 
       let user = userMap.get(uid);
 
+      // 🆕 auto create user baru
       if (!user) {
         const [newUser] = await db("users")
           .insert({
             device_user_id: uid,
             name: `User ${uid}`,
-            department: getDepartment(uid), // ✅ tambah
+            department: getDepartment(uid),
+            deleted_at: null,
           })
           .returning("*");
 
         user = newUser;
+
         userMap.set(uid, user);
 
-        console.log("👤 NEW USER:", uid);
+        console.log(`👤 NEW USER: ${uid}`);
       }
 
       insertData.push({
@@ -85,10 +112,10 @@ export async function syncDevice(device: any) {
 
     totalPrepared = insertData.length;
 
+    // ✅ chunk insert
     const chunks = chunkArray(insertData, 500);
 
     for (const chunk of chunks) {
-      // ✅ insert → ambil ID aja
       const inserted = await db("attendances")
         .insert(chunk)
         .onConflict(["device_id", "device_user_id", "timestamp"])
@@ -98,18 +125,20 @@ export async function syncDevice(device: any) {
       totalInserted += inserted.length;
       totalDuplicate += chunk.length - inserted.length;
 
-      // ✅ JOIN ke users biar dapet name
+      // ✅ realtime emit
       if (inserted.length > 0) {
         const ids = inserted.map((i: any) => i.id);
 
         const fullData = await db("attendances as a")
           .join("users as u", "a.user_id", "u.id")
+          .leftJoin("devices as d", "a.device_id", "d.id")
           .select(
             "a.device_id",
             "a.device_user_id",
             "a.timestamp",
             "u.name",
             "u.department",
+            "d.name as device_name",
           )
           .whereIn("a.id", ids);
 
@@ -120,12 +149,13 @@ export async function syncDevice(device: any) {
             device_id: item.device_id,
             device_user_id: item.device_user_id,
             name: item.name,
-            department: item.department, // ✅ tambah
+            department: item.department,
+            device_name: item.device_name || "-",
             date: dt.toISOString().split("T")[0],
             time: dt.toTimeString().split(" ")[0],
           };
         });
-        // 🚀 kirim ke frontend
+
         io.emit("attendance:batch", formatted);
       }
     }
@@ -135,20 +165,30 @@ export async function syncDevice(device: any) {
     console.log("✅ INSERTED:", totalInserted);
     console.log("⚠️ DUPLICATE:", totalDuplicate);
     console.log("❌ INVALID:", invalidCount);
+    console.log("⛔ SKIPPED DELETED:", totalSkippedDeleted);
     console.log("=================================\n");
 
-    await db("devices").where({ id: device.id }).update({
-      status: "online",
-      last_sync: new Date(),
-    });
+    // ✅ update device online
+    await db("devices")
+      .where({
+        id: device.id,
+      })
+      .update({
+        status: "online",
+        last_sync: new Date(),
+      });
 
     await zk.disconnect();
   } catch (err) {
     console.error("❌ SYNC ERROR:", err);
 
-    await db("devices").where({ id: device.id }).update({
-      status: "offline",
-    });
+    await db("devices")
+      .where({
+        id: device.id,
+      })
+      .update({
+        status: "offline",
+      });
 
     try {
       await zk.disconnect();
@@ -156,6 +196,7 @@ export async function syncDevice(device: any) {
   }
 }
 
+// optional
 export async function getDevices() {
   return db("devices").select("id", "name");
 }

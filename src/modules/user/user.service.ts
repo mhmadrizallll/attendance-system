@@ -1,3 +1,5 @@
+// user.service.ts
+
 import db from "../../config/db";
 
 export async function getUserWithAttendances(userId: number) {
@@ -18,9 +20,9 @@ export async function getUserWithAttendances(userId: number) {
     )
     .orderBy("attendances.timestamp", "desc");
 
-  // 🔥 TAMBAHIN INI (FORMAT TIMESTAMP)
   const formattedAttendances = attendances.map((a) => ({
     ...a,
+
     timestamp_readable: new Date(a.timestamp).toLocaleString("id-ID", {
       timeZone: "Asia/Jakarta",
       dateStyle: "medium",
@@ -35,7 +37,7 @@ export async function getUserWithAttendances(userId: number) {
 }
 
 export async function getUsersService(filters: any) {
-  const { search, department } = filters;
+  const { search, department, show_deleted } = filters;
 
   let query = db("users")
     .select(
@@ -45,10 +47,18 @@ export async function getUsersService(filters: any) {
       "department",
       "card_number",
       "created_at",
+      "deleted_at",
     )
     .orderBy("name", "asc");
 
-  // 🔥 SEARCH NAME / NIK
+  // ✅ FIX
+  if (show_deleted === "true") {
+    query.whereNotNull("deleted_at");
+  } else {
+    query.whereNull("deleted_at");
+  }
+
+  // 🔍 SEARCH
   if (search && search !== "") {
     query.where((builder) => {
       builder
@@ -57,7 +67,7 @@ export async function getUsersService(filters: any) {
     });
   }
 
-  // 🔥 FILTER DEPARTMENT
+  // 🏢 FILTER DEPARTMENT
   if (department && department !== "") {
     query.where("department", department);
   }
@@ -70,12 +80,36 @@ export async function updateUser(id: string, payload: any) {
 
   const updated = await db("users")
     .where({ id })
+    .whereNull("deleted_at")
 
-    // 🔥 jangan update device_user_id
     .update({
       name,
       department,
       card_number,
+    })
+
+    .returning("*");
+
+  return updated[0];
+}
+
+// ✅ SOFT DELETE
+export async function deleteUser(id: string) {
+  return db("users")
+    .where({ id })
+
+    .update({
+      deleted_at: new Date(),
+    });
+}
+
+// ✅ RESTORE USER
+export async function restoreUser(id: string) {
+  const updated = await db("users")
+    .where({ id })
+
+    .update({
+      deleted_at: null,
     })
 
     .returning("*");

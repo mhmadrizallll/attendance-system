@@ -1,10 +1,16 @@
+// user.controller.ts
+
 import { Request, Response } from "express";
+
 import {
   getUserWithAttendances,
   getUsersService,
   updateUser,
+  deleteUser,
+  restoreUser,
 } from "./user.service";
 
+// GET DETAIL
 export async function getUserDetail(req: Request, res: Response) {
   try {
     const { id } = req.params;
@@ -20,12 +26,14 @@ export async function getUserDetail(req: Request, res: Response) {
     return res.json(data);
   } catch (err) {
     console.error(err);
+
     return res.status(500).json({
       message: "Internal server error",
     });
   }
 }
 
+// GET USERS
 export async function getUsers(req: Request, res: Response) {
   try {
     const data = await getUsersService(req.query);
@@ -43,9 +51,12 @@ export async function getUsers(req: Request, res: Response) {
   }
 }
 
+// UPDATE USER
 export async function updateUserController(req: Request, res: Response) {
   try {
-    const { id } = req.params as { id: string };
+    const { id } = req.params as {
+      id: string;
+    };
 
     const user = await updateUser(id, req.body);
 
@@ -58,6 +69,51 @@ export async function updateUserController(req: Request, res: Response) {
 
     res.status(500).json({
       message: "Failed update user",
+    });
+  }
+}
+
+// SOFT DELETE USER
+export async function deleteUserController(req: Request, res: Response) {
+  try {
+    const { id } = req.params as {
+      id: string;
+    };
+
+    await deleteUser(id);
+
+    res.json({
+      success: true,
+      message: "User deactivated",
+    });
+  } catch (err) {
+    console.error(err);
+
+    res.status(500).json({
+      message: "Failed delete user",
+    });
+  }
+}
+
+// ✅ RESTORE USER
+export async function restoreUserController(req: Request, res: Response) {
+  try {
+    const { id } = req.params as {
+      id: string;
+    };
+
+    const user = await restoreUser(id);
+
+    res.json({
+      success: true,
+      message: "User restored",
+      data: user,
+    });
+  } catch (err) {
+    console.error(err);
+
+    res.status(500).json({
+      message: "Failed restore user",
     });
   }
 }
