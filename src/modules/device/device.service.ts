@@ -198,5 +198,41 @@ export async function syncDevice(device: any) {
 
 // optional
 export async function getDevices() {
-  return db("devices").select("id", "name");
+  return await db("devices");
+}
+
+// ADD DEVICE
+export async function createDevice(payload: any) {
+  const inserted = await db("devices")
+    .insert({
+      name: payload.name,
+      ip_address: payload.ip_address,
+      port: payload.port,
+      location: payload.location,
+      status: "offline",
+    })
+    .returning("*");
+
+  return inserted[0];
+}
+
+// UPDATE DEVICE
+export async function updateDevice(id: string, payload: any) {
+  const updated = await db("devices")
+    .where({ id })
+    .update({
+      name: payload.name,
+      ip_address: payload.ip_address,
+      port: payload.port,
+      location: payload.location,
+      updated_at: new Date(),
+    })
+    .returning("*");
+
+  return updated[0];
+}
+
+// DELETE DEVICE
+export async function deleteDevice(id: string) {
+  return db("devices").where({ id }).del();
 }

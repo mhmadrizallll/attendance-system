@@ -1,5 +1,11 @@
 import { Router } from "express";
-import { addDevice, getDevicesController } from "./device.controller";
+import {
+  addDevice,
+  getDevicesController,
+  createDeviceController,
+  updateDeviceController,
+  deleteDeviceController,
+} from "./device.controller";
 import db from "../../config/db";
 import { syncDevice } from "./device.service";
 
@@ -18,5 +24,10 @@ router.get("/sync-now", async (req, res) => {
 });
 
 router.get("/", getDevicesController);
+router.post("/", createDeviceController);
+
+router.put("/:id", updateDeviceController);
+
+router.delete("/:id", deleteDeviceController);
 
 export default router;
