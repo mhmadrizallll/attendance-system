@@ -2,17 +2,19 @@ import { Request, Response } from "express";
 
 import {
   getAttendancesService,
-  getSummaryService,
-  getAttendanceByDate,
-  getSummaryByDate,
+  // getSummaryService,
+  // getAttendanceByDate,
+  // getSummaryByDate,
   getAttendanceByDateAndDept,
   getSummaryByFilters,
   getAttendanceByFilters,
 } from "./attendance.service";
 
-export async function getAttendances(req: Request, res: Response) {
+export async function getAttendances(req: any, res: Response) {
   try {
-    const data = await getAttendancesService(req.query);
+    const user = req.user; // 🔥 penting
+
+    const data = await getAttendancesService(req.query, user);
 
     res.json(data);
   } catch (err: any) {
@@ -27,73 +29,46 @@ export async function getAttendances(req: Request, res: Response) {
 
 export async function getSummary(req: Request, res: Response) {
   try {
-    const data = await getSummaryService();
+    const user = req.user;
 
-    res.json(data);
-  } catch (err: any) {
-    console.error("GET SUMMARY ERROR:", err);
+    const { date, dept, device_id } = req.query;
 
-    res.status(500).json({
-      message: err.message,
-      error: err,
-    });
-  }
-}
+    console.log("========== SUMMARY DEBUG ==========");
+    console.log("REQ USER:", user);
+    console.log("ROLE:", user?.role);
+    console.log("QUERY:", req.query);
+    console.log("===================================");
 
-export async function getByDate(req: Request, res: Response) {
-  try {
-    const { date } = req.query;
+    const data = await getSummaryByFilters(
+      {
+        date: date as string,
+        dept: dept as string,
+        device_id: device_id as string,
+      },
+      user,
+    );
 
-    if (!date) {
-      return res.status(400).json({
-        message: "date is required",
-      });
-    }
-
-    const data = await getAttendanceByDate(date as string);
+    console.log("SUMMARY RESULT:", data);
+    console.log("===================================");
 
     return res.json({
       success: true,
       data,
     });
   } catch (err: any) {
-    console.error("GET BY DATE ERROR:", err);
+    console.error("❌ CONTROLLER ERROR:", err);
 
     return res.status(500).json({
+      success: false,
       message: err.message,
-      error: err,
-    });
-  }
-}
-
-export async function getSummaryDate(req: Request, res: Response) {
-  try {
-    const { date } = req.query;
-
-    if (!date) {
-      return res.status(400).json({
-        message: "date is required",
-      });
-    }
-
-    const data = await getSummaryByDate(date as string);
-
-    return res.json({
-      success: true,
-      data,
-    });
-  } catch (err: any) {
-    console.error("GET SUMMARY DATE ERROR:", err);
-
-    return res.status(500).json({
-      message: err.message,
-      error: err,
     });
   }
 }
 
 export async function getByDateAndDept(req: Request, res: Response) {
   try {
+    const user = req.user;
+
     const { date, dept } = req.query;
 
     if (!date) {
@@ -105,6 +80,7 @@ export async function getByDateAndDept(req: Request, res: Response) {
     const data = await getAttendanceByDateAndDept(
       date as string,
       dept as string,
+      user, // 🔥 penting
     );
 
     return res.json({
@@ -123,23 +99,17 @@ export async function getByDateAndDept(req: Request, res: Response) {
 
 export async function getByFilters(req: Request, res: Response) {
   try {
-    console.log("REQ QUERY:", req.query);
+    const user = req.user;
 
-    const data = await getAttendanceByFilters(req.query);
-
-    const summary = await getSummaryByFilters(req.query);
+    const data = await getAttendanceByFilters(req.query, user);
 
     return res.json({
       success: true,
       data,
-      summary,
     });
   } catch (err: any) {
-    console.error("GET FILTER ERROR:", err);
-
     return res.status(500).json({
       message: err.message,
-      error: err,
     });
   }
 }

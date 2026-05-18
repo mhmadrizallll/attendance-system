@@ -37,7 +37,7 @@ export async function syncUsersFromDevice(device: any) {
 
       // ❌ skip kalau soft delete
       if (deletedSet.has(deviceUserId)) {
-        console.log(`⛔ SKIP DELETED USER: ${deviceUserId}`);
+        // console.log(`⛔ SKIP DELETED USER: ${deviceUserId}`);
         continue;
       }
 

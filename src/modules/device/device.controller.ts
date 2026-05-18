@@ -17,29 +17,35 @@ export async function addDevice(req: Request, res: Response) {
   res.json(device);
 }
 
+// GET
 export async function getDevicesController(req: Request, res: Response) {
   try {
-    const data = await getDevices();
+    const data = await getDevices(req.user);
+
     res.json({ data });
-  } catch (err) {
-    res.status(500).json({ message: "error" });
+  } catch (err: any) {
+    console.error(err);
+
+    res.status(403).json({
+      message: err.message || "Access denied",
+    });
   }
 }
 
 // CREATE
 export async function createDeviceController(req: Request, res: Response) {
   try {
-    const data = await createDevice(req.body);
+    const data = await createDevice(req.body, req.user);
 
     res.json({
       success: true,
       data,
     });
-  } catch (err) {
+  } catch (err: any) {
     console.error(err);
 
-    res.status(500).json({
-      message: "Failed create device",
+    res.status(403).json({
+      message: err.message || "Failed create device",
     });
   }
 }
@@ -49,17 +55,17 @@ export async function updateDeviceController(req: Request, res: Response) {
   try {
     const { id } = req.params as { id: string };
 
-    const data = await updateDevice(id, req.body);
+    const data = await updateDevice(id, req.body, req.user);
 
     res.json({
       success: true,
       data,
     });
-  } catch (err) {
+  } catch (err: any) {
     console.error(err);
 
-    res.status(500).json({
-      message: "Failed update device",
+    res.status(403).json({
+      message: err.message || "Failed update device",
     });
   }
 }
@@ -69,16 +75,16 @@ export async function deleteDeviceController(req: Request, res: Response) {
   try {
     const { id } = req.params as { id: string };
 
-    await deleteDevice(id);
+    await deleteDevice(id, req.user);
 
     res.json({
       success: true,
     });
-  } catch (err) {
+  } catch (err: any) {
     console.error(err);
 
-    res.status(500).json({
-      message: "Failed delete device",
+    res.status(403).json({
+      message: err.message || "Failed delete device",
     });
   }
 }

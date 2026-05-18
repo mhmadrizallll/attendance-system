@@ -1,9 +1,23 @@
-// user.service.ts
-
 import db from "../../config/db";
 
-export async function getUserWithAttendances(userId: number) {
-  const user = await db("users").where({ id: userId }).first();
+import { getPrefixByRole } from "../../utils/getPrefixByRole";
+
+// =========================
+// GET USER DETAIL + LOGS
+// =========================
+export async function getUserWithAttendances(userId: number, loginUser: any) {
+  const prefix = getPrefixByRole(loginUser.role);
+
+  let userQuery = db("users").where({
+    id: userId,
+  });
+
+  // ✅ FILTER ROLE
+  if (prefix) {
+    userQuery.where("device_user_id", "like", `${prefix}%`);
+  }
+
+  const user = await userQuery.first();
 
   if (!user) return null;
 
@@ -14,6 +28,8 @@ export async function getUserWithAttendances(userId: number) {
       "attendances.id",
       "attendances.timestamp",
       "attendances.type",
+      "attendances.device_id",
+
       "devices.name as device_name",
       "devices.location",
       "devices.ip_address",
@@ -36,45 +52,77 @@ export async function getUserWithAttendances(userId: number) {
   };
 }
 
-export async function getUsersService(filters: any) {
+// =========================
+// GET USERS
+// =========================
+export async function getUsersService(filters: any, user: any) {
   const { search, department, show_deleted } = filters;
 
-  let query = db("users")
-    .select(
-      "id",
-      "device_user_id",
-      "name",
-      "department",
-      "card_number",
-      "created_at",
-      "deleted_at",
-    )
-    .orderBy("name", "asc");
+  let query = db("users");
 
-  // ✅ FIX
+  // =========================
+  // ROLE FILTER (INI INTI SYSTEM)
+  // =========================
+
+  if (user.role === "fig") {
+    query.where("device_user_id", "like", "700%");
+  }
+
+  if (user.role === "fio") {
+    query.where("device_user_id", "like", "400%");
+  }
+
+  if (user.role === "fin") {
+    query.where("device_user_id", "like", "000%");
+  }
+
+  // superadmin = semua data
+
+  // =========================
+  // DELETE FILTER
+  // =========================
   if (show_deleted === "true") {
     query.whereNotNull("deleted_at");
   } else {
     query.whereNull("deleted_at");
   }
 
-  // 🔍 SEARCH
-  if (search && search !== "") {
-    query.where((builder) => {
-      builder
-        .whereILike("name", `%${search}%`)
-        .orWhereILike("device_user_id", `%${search}%`);
+  // =========================
+  // SEARCH
+  // =========================
+  if (search) {
+    query.where((b) => {
+      b.whereILike("name", `%${search}%`).orWhereILike(
+        "device_user_id",
+        `%${search}%`,
+      );
     });
   }
 
-  // 🏢 FILTER DEPARTMENT
-  if (department && department !== "") {
+  // =========================
+  // DEPARTMENT FILTER
+  // =========================
+  if (department) {
     query.where("department", department);
   }
 
-  return query;
+  return query.select(
+    "id",
+    "device_user_id",
+    "name",
+    "department",
+    "status",
+    "start_date",
+    "card_number",
+    "created_at",
+    "updated_at",
+    "deleted_at",
+  );
 }
 
+// =========================
+// UPDATE USER
+// =========================
 export async function updateUser(id: string, payload: any) {
   const { name, department, card_number } = payload;
 
@@ -93,7 +141,9 @@ export async function updateUser(id: string, payload: any) {
   return updated[0];
 }
 
-// ✅ SOFT DELETE
+// =========================
+// SOFT DELETE
+// =========================
 export async function deleteUser(id: string) {
   return db("users")
     .where({ id })
@@ -103,7 +153,9 @@ export async function deleteUser(id: string) {
     });
 }
 
-// ✅ RESTORE USER
+// =========================
+// RESTORE USER
+// =========================
 export async function restoreUser(id: string) {
   const updated = await db("users")
     .where({ id })

@@ -1,18 +1,19 @@
 import { Request, Response } from "express";
+
 import { getDepartmentsService } from "./departement.service";
 
 export async function getDepartments(req: Request, res: Response) {
   try {
-    const data = await getDepartmentsService();
+    const user = (req as any).user;
 
-    res.json({
+    const data = await getDepartmentsService(user);
+
+    return res.json({
       success: true,
       data,
     });
   } catch (err: any) {
-    console.error(err);
-
-    res.status(500).json({
+    return res.status(500).json({
       message: err.message,
     });
   }

@@ -8,10 +8,11 @@ import {
 } from "./device.controller";
 import db from "../../config/db";
 import { syncDevice } from "./device.service";
+import { authMiddleware } from "../middlewares/auth";
 
 const router = Router();
 
-router.post("/", addDevice);
+router.post("/", authMiddleware, addDevice);
 
 router.get("/sync-now", async (req, res) => {
   const devices = await db("devices");
@@ -23,11 +24,11 @@ router.get("/sync-now", async (req, res) => {
   res.json({ message: "sync done" });
 });
 
-router.get("/", getDevicesController);
-router.post("/", createDeviceController);
+router.get("/", authMiddleware, getDevicesController);
+router.post("/", authMiddleware, createDeviceController);
 
-router.put("/:id", updateDeviceController);
+router.put("/:id", authMiddleware, updateDeviceController);
 
-router.delete("/:id", deleteDeviceController);
+router.delete("/:id", authMiddleware, deleteDeviceController);
 
 export default router;

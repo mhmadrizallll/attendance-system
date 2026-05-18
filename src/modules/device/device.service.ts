@@ -74,7 +74,7 @@ export async function syncDevice(device: any) {
       if (deletedSet.has(uid)) {
         totalSkippedDeleted++;
 
-        console.log(`⛔ SKIP ATTENDANCE (deleted user): ${uid}`);
+        // console.log(`⛔ SKIP ATTENDANCE (deleted user): ${uid}`);
 
         continue;
       }
@@ -197,12 +197,26 @@ export async function syncDevice(device: any) {
 }
 
 // optional
-export async function getDevices() {
+
+// CHECK ADMIN
+function isAdmin(user: any) {
+  return ["admin", "superadmin"].includes(user?.role?.toLowerCase());
+}
+// GET DEVICES
+export async function getDevices(user: any) {
+  if (!isAdmin(user)) {
+    throw new Error("Access denied");
+  }
+
   return await db("devices");
 }
 
 // ADD DEVICE
-export async function createDevice(payload: any) {
+export async function createDevice(payload: any, user: any) {
+  if (!isAdmin(user)) {
+    throw new Error("Access denied");
+  }
+
   const inserted = await db("devices")
     .insert({
       name: payload.name,
@@ -217,7 +231,11 @@ export async function createDevice(payload: any) {
 }
 
 // UPDATE DEVICE
-export async function updateDevice(id: string, payload: any) {
+export async function updateDevice(id: string, payload: any, user: any) {
+  if (!isAdmin(user)) {
+    throw new Error("Access denied");
+  }
+
   const updated = await db("devices")
     .where({ id })
     .update({
@@ -233,6 +251,10 @@ export async function updateDevice(id: string, payload: any) {
 }
 
 // DELETE DEVICE
-export async function deleteDevice(id: string) {
+export async function deleteDevice(id: string, user: any) {
+  if (!isAdmin(user)) {
+    throw new Error("Access denied");
+  }
+
   return db("devices").where({ id }).del();
 }

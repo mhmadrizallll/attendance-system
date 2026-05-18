@@ -1,5 +1,3 @@
-// user.route.ts
-
 import express from "express";
 
 import {
@@ -10,21 +8,19 @@ import {
   restoreUserController,
 } from "./user.controller";
 
+import { authMiddleware } from "../middlewares/auth";
+
 const router = express.Router();
 
-// GET DETAIL
-router.get("/:id", getUserDetail);
+// ✅ PROTECTED ROUTES
+router.get("/", authMiddleware, getUsers);
 
-// GET USERS
-router.get("/", getUsers);
+router.get("/:id", authMiddleware, getUserDetail);
 
-// UPDATE USER
-router.put("/:id", updateUserController);
+router.put("/:id", authMiddleware, updateUserController);
 
-// SOFT DELETE
-router.delete("/:id", deleteUserController);
+router.delete("/:id", authMiddleware, deleteUserController);
 
-// ✅ RESTORE USER
-router.patch("/:id/restore", restoreUserController);
+router.patch("/:id/restore", authMiddleware, restoreUserController);
 
 export default router;

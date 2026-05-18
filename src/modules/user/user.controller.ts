@@ -1,5 +1,3 @@
-// user.controller.ts
-
 import { Request, Response } from "express";
 
 import {
@@ -10,12 +8,17 @@ import {
   restoreUser,
 } from "./user.service";
 
-// GET DETAIL
+// =========================
+// GET DETAIL USER + LOGS
+// =========================
 export async function getUserDetail(req: Request, res: Response) {
   try {
     const { id } = req.params;
 
-    const data = await getUserWithAttendances(Number(id));
+    // ✅ USER LOGIN DARI JWT
+    const loginUser = (req as any).user;
+
+    const data = await getUserWithAttendances(Number(id), loginUser);
 
     if (!data) {
       return res.status(404).json({
@@ -33,25 +36,29 @@ export async function getUserDetail(req: Request, res: Response) {
   }
 }
 
+// =========================
 // GET USERS
+// =========================
 export async function getUsers(req: Request, res: Response) {
   try {
-    const data = await getUsersService(req.query);
+    const user = (req as any).user;
+
+    const data = await getUsersService(req.query, user);
 
     return res.json({
       success: true,
       data,
     });
   } catch (err: any) {
-    console.error("GET USERS ERROR:", err);
-
     return res.status(500).json({
       message: err.message,
     });
   }
 }
 
+// =========================
 // UPDATE USER
+// =========================
 export async function updateUserController(req: Request, res: Response) {
   try {
     const { id } = req.params as {
@@ -73,7 +80,9 @@ export async function updateUserController(req: Request, res: Response) {
   }
 }
 
+// =========================
 // SOFT DELETE USER
+// =========================
 export async function deleteUserController(req: Request, res: Response) {
   try {
     const { id } = req.params as {
@@ -95,7 +104,9 @@ export async function deleteUserController(req: Request, res: Response) {
   }
 }
 
-// ✅ RESTORE USER
+// =========================
+// RESTORE USER
+// =========================
 export async function restoreUserController(req: Request, res: Response) {
   try {
     const { id } = req.params as {

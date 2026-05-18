@@ -6,6 +6,8 @@ import itReportRoutes from "../report/it-report.route";
 import attendanceRoutes from "../attendance/attendance.route";
 import departmentRoutes from "../departement/departement.route";
 import importRoutes from "../import/import.route";
+import authRoutes from "../auth/auth.route";
+import probationRoutes from "../probation/probation.route";
 
 const router = Router();
 
@@ -16,5 +18,7 @@ router.use("/send-it-report", itReportRoutes);
 router.use("/attendances", attendanceRoutes);
 router.use("/departments", departmentRoutes);
 router.use("/import", importRoutes);
+router.use("/auth", authRoutes);
+router.use("/probation", probationRoutes);
 
 export default router;

@@ -15,27 +15,9 @@ export async function importUsersFromExcel(filePath: string) {
   const sheet = workbook.Sheets[sheetName];
 
   // RAW JSON
-  const rawRows: any[] = XLSX.utils.sheet_to_json(sheet);
+  const rows: any[] = XLSX.utils.sheet_to_json(sheet);
 
-  // =========================
-  // NORMALIZE HEADER
-  // =========================
-  const rows = rawRows.map((row) => {
-    const newRow: any = {};
-
-    Object.keys(row).forEach((key) => {
-      // 🔥 AMBIL BAHASA INDONESIA SAJA
-      const cleanKey = key
-        .split("\r\n")[0] // ambil sebelum enter
-        .trim();
-
-      newRow[cleanKey] = row[key];
-    });
-
-    return newRow;
-  });
-
-  console.log("NORMALIZED ROW:", rows[0]);
+  console.log("FIRST ROW:", rows[0]);
 
   // =========================
   // RESULT
@@ -50,21 +32,29 @@ export async function importUsersFromExcel(filePath: string) {
   for (const row of rows) {
     console.log(row);
 
-    // ✅ SEKARANG SUDAH BERSIH
-    const nik = String(row["Nik"] || "")
+    // =========================
+    // GET VALUE FROM EXCEL
+    // =========================
+    const nik = String(row["Employee No."] || "")
       .replace(".0", "")
       .trim();
 
-    const name = String(row["Nama"] || "").trim();
+    const name = String(row["Name"] || "").trim();
 
-    const department = String(row["Nama Bagian"] || "").trim();
+    // 🔥 LANGSUNG AMBIL DARI KOLOM EXCEL
+    const department = String(row["Group name"] || "").trim();
 
-    // SKIP HEADER PALSU
-    if (nik === "Nik") {
+    const status = String(row["Employment Status Name"] || "").trim();
+
+    const start_date = row["Start Date"] ? new Date(row["Start Date"]) : null;
+
+    // =========================
+    // SKIP
+    // =========================
+    if (nik === "Employee No.") {
       continue;
     }
 
-    // SKIP EMPTY
     if (!nik) {
       continue;
     }
@@ -87,9 +77,13 @@ export async function importUsersFromExcel(filePath: string) {
           id: existingUser.id,
         })
         .update({
+          name: name || existingUser.name,
+
           department,
 
-          name: name || existingUser.name,
+          status,
+
+          start_date,
         });
 
       updatedUsers.push({
@@ -116,6 +110,10 @@ export async function importUsersFromExcel(filePath: string) {
         name,
 
         department,
+
+        status,
+
+        start_date,
       });
 
       insertedUsers.push({
@@ -124,6 +122,10 @@ export async function importUsersFromExcel(filePath: string) {
         name,
 
         department,
+
+        status,
+
+        start_date,
       });
 
       console.log(`➕ INSERTED ${nik}`);

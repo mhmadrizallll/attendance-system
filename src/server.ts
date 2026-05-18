@@ -9,6 +9,8 @@ import { startDebugListener } from "./realtime/debug.listener";
 import "./modules/jobs/it-report-server.job";
 import "./modules/jobs/it-report.job";
 
+import "./modules/probation/probation.cron";
+
 const PORT = process.env.PORT || 5000;
 
 const server = http.createServer(app);
