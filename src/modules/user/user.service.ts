@@ -16,10 +16,19 @@ import { getNextDeviceUID } from "../../utils/getNextDeviceUID";
 export async function createUserService(payload: any) {
   const { device_user_id, name, department, card_number, devices } = payload;
 
+  console.log("\n========== CREATE USER START ==========");
+  console.log("PAYLOAD:", payload);
+
+  // =========================
+  // VALIDATION
+  // =========================
+  if (!devices || devices.length === 0) {
+    throw new Error("Please select at least one device");
+  }
+
   // =========================
   // CHECK DUPLICATE
   // =========================
-
   const existing = await db("users")
     .where({
       device_user_id,
@@ -33,7 +42,6 @@ export async function createUserService(payload: any) {
   // =========================
   // GET NEXT UID
   // =========================
-
   const nextUID = await getNextDeviceUID();
 
   console.log("NEXT UID:", nextUID);
@@ -41,7 +49,6 @@ export async function createUserService(payload: any) {
   // =========================
   // CREATE USER DB
   // =========================
-
   const [user] = await db("users")
     .insert({
       device_uid: nextUID,
@@ -53,17 +60,32 @@ export async function createUserService(payload: any) {
     })
     .returning("*");
 
+  console.log("✅ USER CREATED:", user);
+
+  // =========================
+  // GET SELECTED DEVICES ONLY
+  // =========================
+  const selectedDevices = await db("devices")
+    .whereIn("id", devices)
+    .select("*");
+
+  console.log("📡 SELECTED DEVICES:", selectedDevices.length);
+
   // =========================
   // PUSH USER TO DEVICE
   // =========================
+  for (const device of selectedDevices) {
+    console.log("\n==============================");
+    console.log("🔌 DEVICE:", device.name);
+    console.log("IP:", device.ip_address);
+    console.log("==============================");
 
-  if (devices?.length > 0) {
-    const selectedDevices = await db("devices").whereIn("id", devices);
-
-    for (const device of selectedDevices) {
+    try {
       const success = await pushUserToDevice(device, user);
 
-      // save pivot kalau sukses
+      // =========================
+      // SAVE RELATION
+      // =========================
       if (success) {
         await db("device_users")
           .insert({
@@ -76,9 +98,16 @@ export async function createUserService(payload: any) {
         console.log(
           `✅ RELATION SAVED: USER ${user.id} -> DEVICE ${device.id}`,
         );
+      } else {
+        console.log(`❌ PUSH FAILED: ${device.name}`);
       }
+    } catch (err) {
+      console.log(`❌ ERROR PUSH DEVICE: ${device.name}`);
+      console.error(err);
     }
   }
+
+  console.log("\n========== CREATE USER END ==========");
 
   return {
     success: true,
@@ -241,7 +270,7 @@ export async function updateUser(id: string, payload: any) {
   // =========================
   // GET DEVICE RELATIONS
   // =========================
-  let deviceRelations = await db("device_users as du")
+  const deviceRelations = await db("device_users as du")
     .join("devices as d", "du.device_id", "d.id")
     .where("du.user_id", id)
     .select("d.*");
@@ -249,29 +278,10 @@ export async function updateUser(id: string, payload: any) {
   console.log("📡 DEVICE RELATIONS FOUND:", deviceRelations.length);
 
   // =========================
-  // AUTO FIX IF EMPTY RELATION
+  // VALIDATION
   // =========================
   if (deviceRelations.length === 0) {
-    console.log("⚠️ NO DEVICE RELATION FOUND - AUTO FIX ENABLED");
-
-    const allDevices = await db("devices");
-
-    for (const device of allDevices) {
-      await db("device_users")
-        .insert({
-          device_id: device.id,
-          user_id: id,
-        })
-        .onConflict(["device_id", "user_id"])
-        .ignore();
-    }
-
-    deviceRelations = await db("device_users as du")
-      .join("devices as d", "du.device_id", "d.id")
-      .where("du.user_id", id)
-      .select("d.*");
-
-    console.log("✅ RELATION AUTO FIXED:", deviceRelations.length);
+    throw new Error("User has no device relation");
   }
 
   // =========================
@@ -305,7 +315,7 @@ export async function updateUser(id: string, payload: any) {
         ]);
 
         console.log("🗑 DELETE RESULT:", delRes);
-      } catch (e) {
+      } catch (e: any) {
         console.log("⚠️ DELETE FAILED (IGNORED):", e.message);
       }
 
@@ -325,12 +335,12 @@ export async function updateUser(id: string, payload: any) {
       console.log("🧾 SET USER RESULT:", setRes);
 
       // =========================
-      // REFRESH DEVICE (IMPORTANT)
+      // REFRESH DEVICE
       // =========================
       try {
-        if (zk.refreshData) {
+        if ((zk as any).refreshData) {
           console.log("🔄 REFRESH DEVICE...");
-          await zk.refreshData();
+          await (zk as any).refreshData();
         }
       } catch (e) {
         console.log("⚠️ REFRESH NOT SUPPORTED");
