@@ -1,8 +1,11 @@
-import express from "express";
+// src/modules/users/user.routes.ts
+
+import { Router } from "express";
 
 import {
-  getUserDetail,
-  getUsers,
+  createUserController,
+  getUsersController,
+  getUserDetailController,
   updateUserController,
   deleteUserController,
   restoreUserController,
@@ -10,17 +13,36 @@ import {
 
 import { authMiddleware } from "../middlewares/auth";
 
-const router = express.Router();
+const router = Router();
 
-// ✅ PROTECTED ROUTES
-router.get("/", authMiddleware, getUsers);
+// =========================
+// CREATE USER
+// =========================
+router.post("/", authMiddleware, createUserController);
 
-router.get("/:id", authMiddleware, getUserDetail);
+// =========================
+// GET USERS
+// =========================
+router.get("/", authMiddleware, getUsersController);
 
+// =========================
+// GET USER DETAIL
+// =========================
+router.get("/:id", authMiddleware, getUserDetailController);
+
+// =========================
+// UPDATE USER
+// =========================
 router.put("/:id", authMiddleware, updateUserController);
 
+// =========================
+// DELETE USER
+// =========================
 router.delete("/:id", authMiddleware, deleteUserController);
 
-router.patch("/:id/restore", authMiddleware, restoreUserController);
+// =========================
+// RESTORE USER
+// =========================
+router.patch("/restore/:id", authMiddleware, restoreUserController);
 
 export default router;

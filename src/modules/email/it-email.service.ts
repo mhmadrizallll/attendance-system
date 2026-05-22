@@ -238,10 +238,10 @@ export async function sendItReport(
   // SEND EMAIL
   // =========================
   await transporter.sendMail({
-    from: `<${process.env.SMTP_USER}>`,
+    // from: `<${process.env.SMTP_USER}>`,
     // to: ["it.rizal@pt-longwell.com"],
-    to: toEmails,
-    cc: ["weitse.hung@pt-richshoes.com"],
+    // to: toEmails,
+    // cc: ["weitse.hung@pt-richshoes.com"],
     subject: `Daily Attendance Report - ${reportDate}`,
     html,
     attachments: [

@@ -1,37 +1,26 @@
-import { Request, Response } from "express";
+// src/modules/users/user.controller.ts
 
 import {
-  getUserWithAttendances,
+  createUserService,
   getUsersService,
+  getUserWithAttendances,
   updateUser,
   deleteUser,
   restoreUser,
 } from "./user.service";
 
 // =========================
-// GET DETAIL USER + LOGS
+// CREATE USER
 // =========================
-export async function getUserDetail(req: Request, res: Response) {
+export async function createUserController(req: any, res: any) {
   try {
-    const { id } = req.params;
+    const result = await createUserService(req.body, req.user);
 
-    // ✅ USER LOGIN DARI JWT
-    const loginUser = (req as any).user;
-
-    const data = await getUserWithAttendances(Number(id), loginUser);
-
-    if (!data) {
-      return res.status(404).json({
-        message: "User not found",
-      });
-    }
-
-    return res.json(data);
-  } catch (err) {
-    console.error(err);
-
+    return res.json(result);
+  } catch (err: any) {
     return res.status(500).json({
-      message: "Internal server error",
+      success: false,
+      message: err.message,
     });
   }
 }
@@ -39,18 +28,46 @@ export async function getUserDetail(req: Request, res: Response) {
 // =========================
 // GET USERS
 // =========================
-export async function getUsers(req: Request, res: Response) {
+export async function getUsersController(req: any, res: any) {
   try {
-    const user = (req as any).user;
-
-    const data = await getUsersService(req.query, user);
+    const result = await getUsersService(req.query, req.user);
 
     return res.json({
       success: true,
-      data,
+      data: result,
     });
   } catch (err: any) {
     return res.status(500).json({
+      success: false,
+      message: err.message,
+    });
+  }
+}
+
+// =========================
+// GET USER DETAIL
+// =========================
+export async function getUserDetailController(req: any, res: any) {
+  try {
+    const result = await getUserWithAttendances(
+      Number(req.params.id),
+      req.user,
+    );
+
+    if (!result) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found",
+      });
+    }
+
+    return res.json({
+      success: true,
+      data: result,
+    });
+  } catch (err: any) {
+    return res.status(500).json({
+      success: false,
       message: err.message,
     });
   }
@@ -59,47 +76,38 @@ export async function getUsers(req: Request, res: Response) {
 // =========================
 // UPDATE USER
 // =========================
-export async function updateUserController(req: Request, res: Response) {
+export async function updateUserController(req: any, res: any) {
   try {
-    const { id } = req.params as {
-      id: string;
-    };
+    const result = await updateUser(req.params.id, req.body);
 
-    const user = await updateUser(id, req.body);
-
-    res.json({
+    return res.json({
       success: true,
-      data: user,
+      message: "User updated successfully",
+      data: result,
     });
-  } catch (err) {
-    console.error(err);
-
-    res.status(500).json({
-      message: "Failed update user",
+  } catch (err: any) {
+    return res.status(500).json({
+      success: false,
+      message: err.message,
     });
   }
 }
 
 // =========================
-// SOFT DELETE USER
+// DELETE USER
 // =========================
-export async function deleteUserController(req: Request, res: Response) {
+export async function deleteUserController(req: any, res: any) {
   try {
-    const { id } = req.params as {
-      id: string;
-    };
+    await deleteUser(req.params.id);
 
-    await deleteUser(id);
-
-    res.json({
+    return res.json({
       success: true,
-      message: "User deactivated",
+      message: "User deleted successfully",
     });
-  } catch (err) {
-    console.error(err);
-
-    res.status(500).json({
-      message: "Failed delete user",
+  } catch (err: any) {
+    return res.status(500).json({
+      success: false,
+      message: err.message,
     });
   }
 }
@@ -107,24 +115,19 @@ export async function deleteUserController(req: Request, res: Response) {
 // =========================
 // RESTORE USER
 // =========================
-export async function restoreUserController(req: Request, res: Response) {
+export async function restoreUserController(req: any, res: any) {
   try {
-    const { id } = req.params as {
-      id: string;
-    };
+    const result = await restoreUser(req.params.id);
 
-    const user = await restoreUser(id);
-
-    res.json({
+    return res.json({
       success: true,
-      message: "User restored",
-      data: user,
+      message: "User restored successfully",
+      data: result,
     });
-  } catch (err) {
-    console.error(err);
-
-    res.status(500).json({
-      message: "Failed restore user",
+  } catch (err: any) {
+    return res.status(500).json({
+      success: false,
+      message: err.message,
     });
   }
 }
