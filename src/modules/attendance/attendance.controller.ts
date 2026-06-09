@@ -1,5 +1,7 @@
 import { Request, Response } from "express";
 
+import fs from "fs";
+
 import {
   getAttendancesService,
   // getSummaryService,
@@ -8,6 +10,7 @@ import {
   getAttendanceByDateAndDept,
   getSummaryByFilters,
   getAttendanceByFilters,
+  exportAttendanceService,
 } from "./attendance.service";
 
 export async function getAttendances(req: any, res: Response) {
@@ -110,6 +113,27 @@ export async function getByFilters(req: Request, res: Response) {
   } catch (err: any) {
     return res.status(500).json({
       message: err.message,
+    });
+  }
+}
+
+export async function exportAttendance(req: any, res: any) {
+  try {
+    const data = await exportAttendanceService(req.query, req.user);
+
+    const content = data.join("\n");
+
+    res.setHeader("Content-Type", "text/plain");
+
+    res.setHeader("Content-Disposition", `attachment; filename=attendance.txt`);
+
+    return res.send(content);
+  } catch (err: any) {
+    console.error("EXPORT ATTENDANCE ERROR:", err);
+
+    return res.status(500).json({
+      message: err.message,
+      stack: err.stack,
     });
   }
 }

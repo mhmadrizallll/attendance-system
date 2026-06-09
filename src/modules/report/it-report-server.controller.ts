@@ -3,22 +3,26 @@ import { Request, Response } from "express";
 
 export async function sendReportController(req: Request, res: Response) {
   try {
-    const { date, deviceId } = req.query;
+    const { date, start_date, end_date } = req.query;
 
-    if (!date) {
+    const start = String(start_date || date || "");
+    const end = String(end_date || start_date || date || "");
+
+    if (!start) {
       return res.status(400).json({
-        message: "date required (format: YYYY-MM-DD)",
+        message: "Tanggal wajib diisi",
       });
     }
 
     await sendReportByDate({
-      date,
-      deviceId: Number(deviceId) || 1,
+      start_date: start,
+      end_date: end,
     });
 
     return res.json({
       message: "IT Server Report sent successfully",
-      date,
+      start_date: start,
+      end_date: end,
     });
   } catch (err) {
     console.error("❌ CONTROLLER ERROR:", err);

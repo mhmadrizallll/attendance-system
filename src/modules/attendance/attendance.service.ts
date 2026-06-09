@@ -1,7 +1,7 @@
 import db from "../../config/db";
 
 export async function getAttendancesService(filters: any, user: any) {
-  const { date, device_id, user_id } = filters;
+  const { date, start_date, end_date, device_id, user_id } = filters;
 
   let query = db("attendances")
     .leftJoin("users", "attendances.user_id", "users.id")
@@ -37,7 +37,14 @@ export async function getAttendancesService(filters: any, user: any) {
   // =========================
 
   if (date) {
-    query.whereRaw("DATE(attendances.timestamp) = ?", [date]);
+    query.whereRaw('DATE(attendances."timestamp") = ?', [date]);
+  }
+
+  if (start_date && end_date) {
+    query.whereRaw('DATE(attendances."timestamp") BETWEEN ? AND ?', [
+      start_date,
+      end_date,
+    ]);
   }
 
   if (device_id) {
@@ -116,7 +123,7 @@ export async function getAttendanceByDateAndDept(
 }
 
 export async function getAttendanceByFilters(filters: any, user: any) {
-  const { date, dept, device_id, user_id } = filters;
+  const { date, start_date, end_date, dept, device_id, user_id } = filters;
 
   let query = db("attendances as a")
     .join("users as u", "a.user_id", "u.id")
@@ -130,8 +137,17 @@ export async function getAttendanceByFilters(filters: any, user: any) {
   // =====================
   // DATE FILTER
   // =====================
+  // single date
   if (date) {
-    query.whereRaw("DATE(a.timestamp) = ?", [date]);
+    query.whereRaw('DATE(a."timestamp") = ?', [date]);
+  }
+
+  // range date
+  if (start_date && end_date) {
+    query.whereRaw('DATE(a."timestamp") BETWEEN ? AND ?', [
+      start_date,
+      end_date,
+    ]);
   }
 
   // =====================
@@ -210,15 +226,22 @@ export async function getAttendanceByFilters(filters: any, user: any) {
 }
 
 export async function getSummaryByFilters(filters: any, user: any) {
-  const { date, dept, device_id } = filters;
+  const { date, start_date, end_date, dept, device_id } = filters;
 
   let base = db("attendances as a").join("users as u", "a.user_id", "u.id");
 
   // =====================
   // FILTER DATE
   // =====================
-  if (date && date !== "") {
-    base.whereRaw("DATE(a.timestamp) = ?", [date]);
+  if (date) {
+    base.whereRaw('DATE(a."timestamp") = ?', [date]);
+  }
+
+  if (start_date && end_date) {
+    base.whereRaw('DATE(a."timestamp") BETWEEN ? AND ?', [
+      start_date,
+      end_date,
+    ]);
   }
 
   // =====================
@@ -276,4 +299,146 @@ export async function getSummaryByFilters(filters: any, user: any) {
     uniqueUsers: Number(uniqueUsers[0].total),
     activeDevices: Number(activeDevices[0].total),
   };
+}
+
+export async function exportAttendanceService(filters: any, user: any) {
+  const {
+    type, // today | date | range
+    date,
+    start_date,
+    end_date,
+    dept,
+  } = filters;
+
+  let query = db("attendances as a")
+    .join("users as u", "a.user_id", "u.id")
+    .leftJoin("devices as d", "a.device_id", "d.id")
+    .select("a.device_user_id", "a.timestamp", "u.department")
+    .whereRaw("(d.ip_address IS NULL OR d.ip_address <> ?)", ["10.28.1.221"])
+    .orderBy("a.timestamp", "asc");
+
+  // ====================================
+  // FILTER DATE
+  // ====================================
+
+  if (type === "today") {
+    query.whereRaw('DATE(a."timestamp") = CURRENT_DATE');
+  }
+
+  if (type === "date" && date) {
+    query.whereRaw('DATE(a."timestamp") = ?', [date]);
+  }
+
+  if (type === "range" && start_date && end_date) {
+    query.whereRaw('DATE(a."timestamp") BETWEEN ? AND ?', [
+      start_date,
+      end_date,
+    ]);
+  }
+
+  // ====================================
+  // ROLE SECURITY
+  // ====================================
+
+  const role = (user?.role || "").toUpperCase();
+
+  const rolePrefixMap: Record<string, string> = {
+    FIG: "700",
+    FIO: "400",
+    FIN: "000",
+  };
+
+  if (["ADMIN", "SUPERADMIN"].includes(role)) {
+    if (dept && dept !== "") {
+      query.where("u.department", dept);
+    }
+  } else {
+    const prefix = rolePrefixMap[role];
+
+    if (!prefix) {
+      return [];
+    }
+
+    query.whereRaw("CAST(a.device_user_id AS TEXT) LIKE ?", [`${prefix}%`]);
+  }
+
+  // ====================================
+  // EXECUTE QUERY
+  // ====================================
+
+  const data = await query;
+
+  // ====================================
+  // AMBIL IN & OUT
+  // ====================================
+
+  const grouped = new Map();
+
+  for (const item of data) {
+    const d = new Date(item.timestamp);
+
+    const yyyy = d.getFullYear();
+    const mm = String(d.getMonth() + 1).padStart(2, "0");
+    const dd = String(d.getDate()).padStart(2, "0");
+
+    const dateKey = `${yyyy}-${mm}-${dd}`;
+
+    const key = `${item.device_user_id}_${dateKey}`;
+
+    if (!grouped.has(key)) {
+      grouped.set(key, {
+        in: null,
+        out: null,
+      });
+    }
+
+    const row = grouped.get(key);
+
+    const totalMinutes = d.getHours() * 60 + d.getMinutes();
+
+    // IN = 07:15 - 14:59
+    if (totalMinutes >= 435 && totalMinutes < 900) {
+      if (!row.in || d.getTime() < new Date(row.in.timestamp).getTime()) {
+        row.in = item;
+      }
+    }
+
+    // OUT = >= 15:00
+    if (totalMinutes >= 900) {
+      if (!row.out || d.getTime() > new Date(row.out.timestamp).getTime()) {
+        row.out = item;
+      }
+    }
+  }
+
+  const finalData: any[] = [];
+
+  for (const row of grouped.values()) {
+    if (row.in) finalData.push(row.in);
+    if (row.out) finalData.push(row.out);
+  }
+
+  // ====================================
+  // FORMAT TXT
+  // ====================================
+
+  return finalData
+    .sort(
+      (a, b) =>
+        new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime(),
+    )
+    .map((item) => {
+      const d = new Date(item.timestamp);
+
+      const yyyy = d.getFullYear();
+      const mm = String(d.getMonth() + 1).padStart(2, "0");
+      const dd = String(d.getDate()).padStart(2, "0");
+
+      const hh = String(d.getHours()).padStart(2, "0");
+      const mi = String(d.getMinutes()).padStart(2, "0");
+
+      const uid = String(item.device_user_id).padStart(10, "0");
+
+      return `${uid};${yyyy}/${mm}/${dd};${hh}:${mi}`;
+    });
 }

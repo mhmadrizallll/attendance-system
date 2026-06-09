@@ -1,34 +1,54 @@
 import db from "../../config/db";
 import { sendItReport } from "../email/it-email-server.service";
 
-export async function sendReportByDate({
-  date,
-  deviceId,
-}: {
-  date: string;
-  deviceId: number;
-}) {
-  console.log("📅 FILTER DATE:", date);
+const SERVER_IP = "10.28.1.221";
 
-  const logs = await db("attendances")
-    .join("users", "users.id", "attendances.user_id")
-    .where("attendances.device_id", deviceId)
-    .whereRaw("DATE(attendances.timestamp AT TIME ZONE 'Asia/Jakarta') = ?", [
-      date,
-    ])
-    .select(
-      "users.name",
-      "attendances.device_user_id",
-      "attendances.timestamp",
+export async function sendReportByDate({
+  start_date,
+  end_date,
+}: {
+  start_date: string;
+  end_date: string;
+}) {
+  console.log("📅 START:", start_date);
+  console.log("📅 END:", end_date);
+
+  let query = db("attendances as a")
+    .join("users as u", "u.id", "a.user_id")
+    .join("devices as d", "d.id", "a.device_id")
+    .where("d.ip_address", SERVER_IP);
+
+  // FILTER TANGGAL
+  if (start_date && end_date) {
+    query.whereRaw(
+      `DATE(a.timestamp AT TIME ZONE 'Asia/Jakarta')
+       BETWEEN ? AND ?`,
+      [start_date, end_date],
     );
+  } else if (start_date) {
+    query.whereRaw(`DATE(a.timestamp AT TIME ZONE 'Asia/Jakarta') = ?`, [
+      start_date,
+    ]);
+  }
+
+  const logs = await query.select(
+    "u.name",
+    "a.device_user_id",
+    "a.timestamp",
+    "d.name as device_name",
+  );
 
   console.log("📊 TOTAL LOGS:", logs.length);
 
   const itUsers = await db("it_recipients").select("email");
+
   const emails = itUsers.map((u) => u.email);
 
-  // 🔥 FIX UTAMA DI SINI
-  await sendItReport(logs, emails, date);
+  await sendItReport(
+    logs,
+    emails,
+    start_date === end_date ? start_date : `${start_date} s/d ${end_date}`,
+  );
 
-  console.log("✅ REPORT SENT:", date);
+  console.log("✅ REPORT SENT");
 }

@@ -1,8 +1,15 @@
 import db from "../../config/db";
 import { sendItReport } from "../email/it-email.service";
 
-export async function sendItReportByDate({ date }: { date: string }) {
+export async function sendItReportByDate({
+  start_date,
+  end_date,
+}: {
+  start_date: string;
+  end_date: string;
+}) {
   const DEVICE_IDS = [2, 3];
+
   const DEVICE_USER_IDS = [
     "700092",
     "700093",
@@ -16,22 +23,35 @@ export async function sendItReportByDate({ date }: { date: string }) {
     "700141",
   ];
 
-  console.log("📅 QUERY DATE:", date);
+  console.log("📅 START:", start_date);
+  console.log("📅 END:", end_date);
 
-  const logs = await db("attendances")
+  let query = db("attendances")
     .join("users", "users.id", "attendances.user_id")
     .whereIn("attendances.device_id", DEVICE_IDS)
-    .whereIn("attendances.device_user_id", DEVICE_USER_IDS)
-    .whereRaw("DATE(attendances.timestamp) = ?", [date])
-    .select(
-      "users.name",
-      "attendances.device_user_id",
-      "attendances.timestamp",
-    );
+    .whereIn("attendances.device_user_id", DEVICE_USER_IDS);
+
+  if (start_date && end_date) {
+    query.whereRaw('DATE(attendances."timestamp") BETWEEN ? AND ?', [
+      start_date,
+      end_date,
+    ]);
+  } else if (start_date) {
+    query.whereRaw('DATE(attendances."timestamp") = ?', [start_date]);
+  }
+
+  const logs = await query.select(
+    "users.name",
+    "attendances.device_user_id",
+    "attendances.timestamp",
+  );
 
   const itUsers = await db("it_recipients").select("email");
   const emails = itUsers.map((u) => u.email);
 
-  // ✅ FIX DI SINI
-  await sendItReport(logs, emails, date);
+  await sendItReport(
+    logs,
+    emails,
+    start_date === end_date ? start_date : `${start_date} s/d ${end_date}`,
+  );
 }

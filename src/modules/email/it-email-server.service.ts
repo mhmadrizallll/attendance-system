@@ -17,6 +17,41 @@ type Attendance = {
   timestamp: Date;
 };
 
+function formatPeriod(period: string) {
+  // RANGE
+  if (period.includes("s/d")) {
+    const [start, end] = period.split("s/d").map((x) => x.trim());
+
+    const startText = new Date(`${start}T00:00:00`).toLocaleDateString(
+      "id-ID",
+      {
+        timeZone: "Asia/Jakarta",
+        day: "2-digit",
+        month: "long",
+        year: "numeric",
+      },
+    );
+
+    const endText = new Date(`${end}T00:00:00`).toLocaleDateString("id-ID", {
+      timeZone: "Asia/Jakarta",
+      day: "2-digit",
+      month: "long",
+      year: "numeric",
+    });
+
+    return `${startText} s/d ${endText}`;
+  }
+
+  // SINGLE DATE
+  return new Date(`${period}T00:00:00`).toLocaleDateString("id-ID", {
+    timeZone: "Asia/Jakarta",
+    weekday: "long",
+    day: "2-digit",
+    month: "long",
+    year: "numeric",
+  });
+}
+
 export async function sendItReport(
   data: Attendance[],
   toEmails: string[],
@@ -27,89 +62,90 @@ export async function sendItReport(
   }
 
   console.log("📊 DATA LENGTH:", data.length);
-  console.log("📅 REPORT DATE:", date);
+  console.log("📅 REPORT PERIOD:", date);
 
   // =========================
-  // ✅ SORT BY TIME ONLY
+  // SORT BY TIME ASC
   // =========================
-  data.sort((a, b) => {
-    return new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime();
-  });
+  data.sort(
+    (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime(),
+  );
+
+  const reportDate = formatPeriod(date);
 
   // =========================
-  // REPORT DATE
+  // HELPERS
   // =========================
-  const reportDate = new Date(date + "T00:00:00").toLocaleDateString("id-ID", {
-    timeZone: "Asia/Jakarta",
-    weekday: "long",
-    year: "numeric",
-    month: "long",
-    day: "numeric",
-  });
+  const formatDate = (d?: Date) =>
+    d
+      ? new Intl.DateTimeFormat("id-ID", {
+          timeZone: "Asia/Jakarta",
+          day: "2-digit",
+          month: "2-digit",
+          year: "numeric",
+        }).format(d)
+      : "-";
+
+  const formatTime = (d?: Date) =>
+    d
+      ? new Intl.DateTimeFormat("id-ID", {
+          timeZone: "Asia/Jakarta",
+          hour: "2-digit",
+          minute: "2-digit",
+          second: "2-digit",
+          hour12: false,
+        }).format(d)
+      : "-";
 
   // =========================
-  // CREATE EXCEL
+  // EXCEL
   // =========================
   const workbook = new ExcelJS.Workbook();
-  const sheet = workbook.addWorksheet("IT Report");
+
+  const sheet = workbook.addWorksheet("IT Report Server");
 
   sheet.columns = [
-    { header: "Nama", key: "name", width: 30 },
-    { header: "NIK", key: "device_user_id", width: 25 },
-    { header: "Waktu", key: "timestamp", width: 30 },
+    { header: "Nama", key: "name", width: 35 },
+    { header: "NIK", key: "device_user_id", width: 20 },
+    { header: "Tanggal", key: "date", width: 20 },
+    { header: "Waktu", key: "time", width: 20 },
   ];
 
   sheet.views = [{ state: "frozen", ySplit: 1 }];
 
-  // HEADER STYLE
+  sheet.autoFilter = {
+    from: "A1",
+    to: "D1",
+  };
+
   const headerRow = sheet.getRow(1);
+
   headerRow.eachCell((cell) => {
-    cell.font = { bold: true, color: { argb: "FFFFFFFF" } };
+    cell.font = {
+      bold: true,
+      color: { argb: "FFFFFFFF" },
+    };
+
     cell.fill = {
       type: "pattern",
       pattern: "solid",
       fgColor: { argb: "FF4F81BD" },
     };
-    cell.alignment = { vertical: "middle", horizontal: "center" };
-    cell.border = {
-      top: { style: "thin" },
-      left: { style: "thin" },
-      bottom: { style: "thin" },
-      right: { style: "thin" },
+
+    cell.alignment = {
+      vertical: "middle",
+      horizontal: "center",
     };
   });
 
-  sheet.autoFilter = {
-    from: "A1",
-    to: "C1",
-  };
+  data.forEach((item) => {
+    const dateObj = new Date(item.timestamp);
 
-  // =========================
-  // INSERT DATA
-  // =========================
-  data.forEach((d) => {
-    const dateObj = d.timestamp ? new Date(d.timestamp) : null;
-
-    const row = sheet.addRow({
-      name: d.name ?? "-",
-      device_user_id: d.device_user_id ?? "-",
-      timestamp: dateObj
-        ? dateObj.toLocaleString("id-ID", { timeZone: "Asia/Jakarta" })
-        : "-",
-    });
-
-    row.eachCell((cell) => {
-      cell.border = {
-        top: { style: "thin" },
-        left: { style: "thin" },
-        bottom: { style: "thin" },
-        right: { style: "thin" },
-      };
-
-      cell.alignment = {
-        vertical: "middle",
-        horizontal: "left",
-      };
+    sheet.addRow({
+      name: item.name ?? "-",
+      device_user_id: item.device_user_id ?? "-",
+      date: formatDate(dateObj),
+      time: formatTime(dateObj),
     });
   });
 
@@ -119,94 +155,109 @@ export async function sendItReport(
   // HTML EMAIL
   // =========================
   const html = `
-  <div style="font-family: Arial, sans-serif; background:#f4f6f8; padding:20px;">
-    <div style="max-width:800px; margin:auto; background:#ffffff; border:1px solid #e0e0e0; border-radius:8px; padding:20px;">
+  <div style="font-family:Arial,sans-serif;background:#f4f6f8;padding:20px;">
+    <div style="max-width:900px;margin:auto;background:#fff;padding:20px;border-radius:8px;">
 
-      <div style="text-align:center; padding-bottom:15px; border-bottom:3px solid #4f81bd; margin-bottom:20px;">
-        <div style="font-size:22px; font-weight:bold; color:#2c3e50;">
+      <div style="text-align:center;border-bottom:3px solid #4f81bd;padding-bottom:15px;margin-bottom:20px;">
+        <h2 style="margin:0;color:#2c3e50;">
           IT REPORT ENTER ON SERVER
-        </div>
+        </h2>
 
-        <div style="font-size:14px; color:#7f8c8d; margin-top:5px;">
+        <div style="margin-top:8px;color:#666;">
           ${reportDate}
-        </div>    
+        </div>
       </div>
 
-      <table style="width:100%; border-collapse:collapse; text-align:center;">
+      <table
+        style="
+          width:100%;
+          border-collapse:collapse;
+          text-align:center;
+        "
+      >
         <thead>
-          <tr style="background:#4f81bd; color:#fff;">
-            <th style="padding:10px; border:1px solid #ddd;">Nama</th>
-            <th style="padding:10px; border:1px solid #ddd;">NIK</th>
-            <th style="padding:10px; border:1px solid #ddd;">Tanggal</th>
-            <th style="padding:10px; border:1px solid #ddd;">Waktu</th>
+          <tr style="background:#4f81bd;color:white;">
+            <th style="padding:10px;border:1px solid #ddd;">Nama</th>
+            <th style="padding:10px;border:1px solid #ddd;">NIK</th>
+            <th style="padding:10px;border:1px solid #ddd;">Tanggal</th>
+            <th style="padding:10px;border:1px solid #ddd;">Waktu</th>
           </tr>
         </thead>
 
         <tbody>
           ${
-            data.length > 0
+            data.length
               ? data
-                  .map((d) => {
-                    const dateObj = d.timestamp ? new Date(d.timestamp) : null;
+                  .map((item) => {
+                    const dateObj = new Date(item.timestamp);
 
                     return `
                       <tr>
-                        <td style="padding:10px; border:1px solid #ddd;">${d.name ?? "-"}</td>
-                        <td style="padding:10px; border:1px solid #ddd;">${d.device_user_id ?? "-"}</td>
-                        <td style="padding:10px; border:1px solid #ddd;">
-                          ${
-                            dateObj
-                              ? dateObj.toLocaleDateString("id-ID", {
-                                  timeZone: "Asia/Jakarta",
-                                })
-                              : "-"
-                          }
+                        <td style="padding:8px;border:1px solid #ddd;">
+                          ${item.name}
                         </td>
-                        <td style="padding:10px; border:1px solid #ddd;">
-                          ${
-                            dateObj
-                              ? dateObj.toLocaleTimeString("id-ID", {
-                                  timeZone: "Asia/Jakarta",
-                                })
-                              : "-"
-                          }
+
+                        <td style="padding:8px;border:1px solid #ddd;">
+                          ${item.device_user_id}
+                        </td>
+
+                        <td style="padding:8px;border:1px solid #ddd;">
+                          ${formatDate(dateObj)}
+                        </td>
+
+                        <td style="padding:8px;border:1px solid #ddd;">
+                          ${formatTime(dateObj)}
                         </td>
                       </tr>
                     `;
                   })
                   .join("")
               : `
-              <tr>
-                <td colspan="4" style="padding:15px; border:1px solid #ddd; color:red;">
-                  Tidak ada aktivitas (libur / tidak ada absen)
-                </td>
-              </tr>
-            `
+                <tr>
+                  <td colspan="4"
+                      style="padding:15px;border:1px solid #ddd;color:red;">
+                    Tidak ada aktivitas
+                  </td>
+                </tr>
+              `
           }
         </tbody>
       </table>
 
-      <div style="text-align:center; margin-top:20px; font-size:11px; color:#95a5a6;">
+      <div
+        style="
+          text-align:center;
+          margin-top:20px;
+          color:#999;
+          font-size:12px;
+        "
+      >
         Generated automatically by IT Software Dept
       </div>
 
     </div>
   </div>
-`;
+  `;
 
   // =========================
   // SEND EMAIL
   // =========================
   await transporter.sendMail({
-    // from: `<${process.env.SMTP_USER}>`,
-    // to: ["it.rizal@pt-longwell.com"],
+    from: `<${process.env.SMTP_USER}>`,
+
+    // production
     // to: toEmails,
-    // cc: ["weitse.hung@pt-richshoes.com"],
-    subject: `Daily IT Report Server - ${reportDate}`,
+
+    // testing
+    to: ["it.rizal@pt-longwell.com"],
+
+    subject: `IT Server Attendance Report (${reportDate})`,
+
     html,
+
     attachments: [
       {
-        filename: `it-report-${date}.xlsx`,
+        filename: `it-server-report-${Date.now()}.xlsx`,
         content: buffer,
         contentType:
           "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -214,5 +265,5 @@ export async function sendItReport(
     ],
   });
 
-  console.log("📧 EMAIL + EXCEL SENT SUCCESS");
+  console.log("📧 IT SERVER REPORT SENT");
 }

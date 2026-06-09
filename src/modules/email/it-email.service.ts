@@ -24,19 +24,64 @@ type ProcessedAttendance = {
   checkOut?: Date;
 };
 
+// =========================
+// FORMAT PERIOD (IMPORTANT)
+// =========================
+function formatPeriod(period: string) {
+  // RANGE
+  if (period.includes("s/d")) {
+    const [start, end] = period.split("s/d").map((x) => x.trim());
+
+    const startFormatted = new Date(`${start}T00:00:00`).toLocaleDateString(
+      "id-ID",
+      {
+        timeZone: "Asia/Jakarta",
+        day: "2-digit",
+        month: "long",
+        year: "numeric",
+      },
+    );
+
+    const endFormatted = new Date(`${end}T00:00:00`).toLocaleDateString(
+      "id-ID",
+      {
+        timeZone: "Asia/Jakarta",
+        day: "2-digit",
+        month: "long",
+        year: "numeric",
+      },
+    );
+
+    return `${startFormatted} s/d ${endFormatted}`;
+  }
+
+  // SINGLE DATE
+  return new Date(`${period}T00:00:00`).toLocaleDateString("id-ID", {
+    timeZone: "Asia/Jakarta",
+    weekday: "long",
+    day: "2-digit",
+    month: "long",
+    year: "numeric",
+  });
+}
+
+// =========================
+// MAIN FUNCTION
+// =========================
 export async function sendItReport(
   data: Attendance[],
   toEmails: string[],
-  date: string,
+  period: string,
 ): Promise<void> {
-  if (!date) {
-    throw new Error("Date is required");
+  if (!period) {
+    throw new Error("Period is required");
   }
 
   console.log("📊 RAW DATA:", data.length);
+  console.log("📅 PERIOD:", period);
 
   // =========================
-  // SORT DATA (USER + TIME)
+  // SORT
   // =========================
   data.sort((a, b) => {
     const userCompare = a.device_user_id.localeCompare(b.device_user_id);
@@ -47,14 +92,13 @@ export async function sendItReport(
   });
 
   // =========================
-  // FILTER + GROUPING
+  // GROUPING
   // =========================
   const processedMap = new Map<string, ProcessedAttendance>();
 
   data.forEach((d) => {
     const dateObj = new Date(d.timestamp);
 
-    // WIB time
     const hour = Number(
       dateObj.toLocaleString("id-ID", {
         timeZone: "Asia/Jakarta",
@@ -82,18 +126,14 @@ export async function sendItReport(
 
     const user = processedMap.get(key)!;
 
-    // =====================
-    // MASUK (07:00–08:00)
-    // =====================
-    if (timeValue >= 420 && timeValue <= 480) {
+    // IN (07:15 - 07:30)
+    if (timeValue >= 435 && timeValue <= 450) {
       if (!user.checkIn || dateObj < user.checkIn) {
         user.checkIn = dateObj;
       }
     }
 
-    // =====================
-    // PULANG (>=16:30)
-    // =====================
+    // OUT (>= 16:30)
     if (timeValue >= 900) {
       if (!user.checkOut || dateObj > user.checkOut) {
         user.checkOut = dateObj;
@@ -106,18 +146,12 @@ export async function sendItReport(
   console.log("✅ CLEAN DATA:", finalData.length);
 
   // =========================
-  // FORMAT TANGGAL REPORT
+  // PERIOD FIX (INI YANG PENTING)
   // =========================
-  const reportDate = new Date(date + "T00:00:00").toLocaleDateString("id-ID", {
-    timeZone: "Asia/Jakarta",
-    weekday: "long",
-    year: "numeric",
-    month: "long",
-    day: "numeric",
-  });
+  const reportPeriod = formatPeriod(period);
 
   // =========================
-  // CREATE EXCEL
+  // EXCEL
   // =========================
   const workbook = new ExcelJS.Workbook();
   const sheet = workbook.addWorksheet("IT Report");
@@ -139,10 +173,13 @@ export async function sendItReport(
       pattern: "solid",
       fgColor: { argb: "FF4F81BD" },
     };
-    cell.alignment = { vertical: "middle", horizontal: "center" };
+    cell.alignment = {
+      vertical: "middle",
+      horizontal: "center",
+    };
   });
 
-  // INSERT DATA
+  // DATA
   finalData.forEach((d) => {
     sheet.addRow({
       name: d.name,
@@ -163,26 +200,32 @@ export async function sendItReport(
   const buffer = await workbook.xlsx.writeBuffer();
 
   // =========================
-  // HTML EMAIL
+  // EMAIL HTML
   // =========================
   const html = `
-  <div style="font-family: Arial, sans-serif; background:#f4f6f8; padding:20px;">
-    <div style="max-width:800px; margin:auto; background:#ffffff; border:1px solid #e0e0e0; border-radius:8px; padding:20px;">
-      
-      <div style="text-align:center; padding-bottom:15px; border-bottom:3px solid #4f81bd; margin-bottom:20px;">
-        <div style="font-size:22px; font-weight:bold; color:#2c3e50;">
-          IT REPORT ON ATTENDANCE
-        </div>
+   <div style="font-family:Arial,sans-serif;background:#f4f6f8;padding:20px;">
+    <div style="max-width:900px;margin:auto;background:#fff;padding:20px;border-radius:8px;">
 
-        <div style="font-size:14px; color:#7f8c8d; margin-top:5px;">
-          ${reportDate}
+      
+      <div style="text-align:center;border-bottom:3px solid #4f81bd;padding-bottom:15px;margin-bottom:20px;">
+        <h2 style="margin:0;color:#2c3e50;">
+          IT REPORT ON ATTENDANCE
+        </h2>
+
+        <div style="margin-top:8px;color:#666;">
+          ${reportPeriod}
         </div>
       </div>
 
-
-      <table style="width:100%; border-collapse:collapse; text-align:center;">
+      <table
+        style="
+          width:100%;
+          border-collapse:collapse;
+          text-align:center;
+        "
+      >
         <thead>
-          <tr style="background:#4f81bd; color:#fff;">
+          <tr style="background:#4f81bd;color:white;">
             <th style="padding:10px; border:1px solid #ddd;">Nama</th>
             <th style="padding:10px; border:1px solid #ddd;">NIK</th>
             <th style="padding:10px; border:1px solid #ddd;">Masuk</th>
@@ -238,15 +281,13 @@ export async function sendItReport(
   // SEND EMAIL
   // =========================
   await transporter.sendMail({
-    // from: `<${process.env.SMTP_USER}>`,
-    // to: ["it.rizal@pt-longwell.com"],
-    // to: toEmails,
-    // cc: ["weitse.hung@pt-richshoes.com"],
-    subject: `Daily Attendance Report - ${reportDate}`,
+    from: `<${process.env.SMTP_USER}>`,
+    to: ["it.rizal@pt-longwell.com"],
+    subject: `IT Attendance Report (${reportPeriod})`,
     html,
     attachments: [
       {
-        filename: `attendance-${date}.xlsx`,
+        filename: `attendance-report-${Date.now()}.xlsx`,
         content: buffer,
       },
     ],
