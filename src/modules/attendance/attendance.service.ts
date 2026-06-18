@@ -111,12 +111,16 @@ export async function getAttendanceByDateAndDept(
   return data.map((item) => {
     const d = new Date(item.timestamp);
 
+    const yyyy = d.getFullYear();
+    const mm = String(d.getMonth() + 1).padStart(2, "0");
+    const dd = String(d.getDate()).padStart(2, "0");
+
     return {
       device_id: item.device_id,
       device_user_id: item.device_user_id,
       name: item.name,
       department: item.department,
-      date: d.toISOString().split("T")[0],
+      date: `${yyyy}-${mm}-${dd}`,
       time: d.toTimeString().split(" ")[0],
     };
   });
@@ -213,13 +217,17 @@ export async function getAttendanceByFilters(filters: any, user: any) {
   return data.map((item) => {
     const d = new Date(item.timestamp);
 
+    const yyyy = d.getFullYear();
+    const mm = String(d.getMonth() + 1).padStart(2, "0");
+    const dd = String(d.getDate()).padStart(2, "0");
+
     return {
       device_id: item.device_id,
       device_name: item.device_name,
       device_user_id: item.device_user_id,
       name: item.name,
       department: item.department,
-      date: d.toISOString().split("T")[0],
+      date: `${yyyy}-${mm}-${dd}`,
       time: d.toTimeString().split(" ")[0],
     };
   });

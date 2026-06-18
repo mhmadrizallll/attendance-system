@@ -8,7 +8,7 @@ export async function sendItReportByDate({
   start_date: string;
   end_date: string;
 }) {
-  const DEVICE_IDS = [2, 3];
+  const DEVICE_IDS = [2, 1];
 
   const DEVICE_USER_IDS = [
     "700092",

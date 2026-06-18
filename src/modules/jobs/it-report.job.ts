@@ -1,7 +1,7 @@
 import cron from "node-cron";
 import { sendItReportByDate } from "../report/it-report.service";
 
-cron.schedule("0 8 * * *", async () => {
+cron.schedule("42 8 * * *", async () => {
   try {
     const now = new Date();
 
@@ -16,7 +16,10 @@ cron.schedule("0 8 * * *", async () => {
 
     console.log("⏰ CRON RUN, DATE:", date);
 
-    await sendItReportByDate({ date });
+    await sendItReportByDate({
+      start_date: date,
+      end_date: date,
+    });
   } catch (error) {
     console.error("❌ CRON ERROR:", error);
   }

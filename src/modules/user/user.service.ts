@@ -377,52 +377,94 @@ export async function updateUser(id: string, payload: any) {
 // SOFT DELETE USER
 // =========================
 export async function deleteUser(id: string) {
+  console.log("\n========== DELETE USER START ==========");
+
   const user = await db("users").where({ id }).first();
 
   if (!user) {
     throw new Error("User not found");
   }
 
-  // =========================
-  // GET DEVICE RELATIONS
-  // =========================
+  console.log("USER:", user);
 
-  const deviceRelations = await db("device_users as du")
+  const devices = await db("device_users as du")
     .join("devices as d", "du.device_id", "d.id")
     .where("du.user_id", id)
     .select("d.*");
 
-  // =========================
-  // DELETE USER FROM DEVICE
-  // =========================
+  if (!devices.length) {
+    throw new Error("User has no device relation");
+  }
 
-  for (const device of deviceRelations) {
-    const zk = new ZKLib(device.ip_address, device.port, 10000, 4000);
+  let successDeleteCount = 0;
+
+  for (const device of devices) {
+    const zk = new ZKLib(device.ip_address, device.port, 15000, 5000);
 
     try {
+      console.log(`\n🔌 CONNECT ${device.name}`);
+
       await zk.createSocket();
-
-      console.log(`🗑 DELETE USER ${user.device_user_id} FROM ${device.name}`);
-
       await zk.disableDevice();
 
-      /**
-       * DELETE USER COMMAND
-       */
+      const usersRes = await zk.getUsers();
 
-      await zk.executeCmd("SSR_DeleteEnrollData", [
-        Number(user.device_uid),
-        String(user.device_user_id),
-        12,
-      ]);
+      const deviceUser = usersRes.data.find(
+        (u: any) =>
+          String(u.userId) === String(user.device_user_id) ||
+          Number(u.uid) === Number(user.device_uid),
+      );
+
+      if (!deviceUser) {
+        console.log("⚠️ USER NOT FOUND IN DEVICE");
+
+        await zk.enableDevice();
+        await zk.disconnect();
+
+        successDeleteCount++;
+        continue;
+      }
+
+      console.log("FOUND USER:", JSON.stringify(deviceUser, null, 2));
+
+      try {
+        console.log("🗑 DELETE USER");
+
+        // cara yg biasa dipakai node-zklib
+        await zk.executeCmd("SSR_DeleteEnrollData", [
+          Number(deviceUser.uid),
+          String(deviceUser.userId),
+          12,
+        ]);
+
+        try {
+          await zk.refreshData();
+        } catch {}
+
+        await new Promise((r) => setTimeout(r, 1000));
+
+        const verify = await zk.getUsers();
+
+        const stillExists = verify.data.find(
+          (u: any) =>
+            String(u.userId) === String(deviceUser.userId) ||
+            Number(u.uid) === Number(deviceUser.uid),
+        );
+
+        if (stillExists) {
+          console.log("❌ USER STILL EXISTS IN DEVICE");
+        } else {
+          console.log("✅ USER REMOVED FROM DEVICE");
+          successDeleteCount++;
+        }
+      } catch (e) {
+        console.error("DELETE COMMAND FAILED", e);
+      }
 
       await zk.enableDevice();
-
-      console.log(`✅ USER DELETED FROM ${device.name}`);
-
       await zk.disconnect();
     } catch (err) {
-      console.error(`❌ DELETE USER FAILED FROM ${device.name}`, err);
+      console.error(`❌ DEVICE ERROR ${device.name}`, err);
 
       try {
         await zk.enableDevice();
@@ -431,20 +473,19 @@ export async function deleteUser(id: string) {
     }
   }
 
-  // =========================
-  // SOFT DELETE DATABASE
-  // =========================
+  if (successDeleteCount !== devices.length) {
+    throw new Error("Failed to delete user from one or more devices");
+  }
 
-  await db("users")
-    .where({ id })
+  await db("device_users").where({ user_id: id }).del();
 
-    .update({
-      deleted_at: new Date(),
-    });
+  await db("users").where({ id }).del();
+
+  console.log("========== DELETE USER END ==========");
 
   return {
     success: true,
-    message: "User deleted successfully",
+    message: "User deleted from device and database",
   };
 }
 

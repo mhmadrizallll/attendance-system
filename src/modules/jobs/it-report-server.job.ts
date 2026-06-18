@@ -2,7 +2,7 @@ import cron from "node-cron";
 import { sendReportByDate } from "../report/it-report-server.service";
 
 cron.schedule(
-  "0 8 * * *",
+  "42 8 * * *",
   async () => {
     console.log("🔔 GENERATE IT REPORT...");
 
@@ -20,8 +20,9 @@ cron.schedule(
       console.log("📅 DATE:", date);
 
       await sendReportByDate({
-        date,
-        deviceId: 1,
+        start_date: date,
+        end_date: date,
+        deviceId: 3,
       });
 
       console.log("✅ REPORT SENT SUCCESS");
