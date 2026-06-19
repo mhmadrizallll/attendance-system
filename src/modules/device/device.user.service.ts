@@ -14,6 +14,19 @@ export async function syncUsersFromDevice(device: any) {
 
     console.log("TOTAL USERS FROM DEVICE:", users.length);
 
+    console.log("\n========== RAW USER FROM DEVICE ==========");
+
+    for (const u of users.slice(0, 10)) {
+      console.log({
+        uid: u.uid,
+        userId: u.userId,
+        name: u.name,
+        cardno: u.cardno,
+      });
+    }
+
+    console.log("=========================================\n");
+
     const activeUsers = await db("users").whereNull("deleted_at");
 
     const activeMap = new Map(
@@ -57,24 +70,46 @@ export async function syncUsersFromDevice(device: any) {
       if (!existing) {
         const nextUID = await getNextDeviceUID();
 
-        await db("users").insert({
-          device_uid: nextUID, // 🔥 WAJIB
-          device_user_id: deviceUserId,
-          name: finalName,
-          card_number: finalCard,
-          department: finalDept,
-          deleted_at: null,
-        });
-
-        console.log(`➕ NEW USER: ${deviceUserId} (UID: ${nextUID})`);
-      } else {
-        await db("users")
-          .where({ id: existing.id })
-          .update({
-            name: isDummy ? existing.name : finalName,
+        const [newUser] = await db("users")
+          .insert({
+            device_uid: nextUID,
+            device_user_id: deviceUserId,
+            name: finalName,
             card_number: finalCard,
             department: finalDept,
-          });
+            deleted_at: null,
+          })
+          .returning("*");
+
+        // 🔥 BUAT RELASI USER -> DEVICE
+        await db("device_users")
+          .insert({
+            user_id: newUser.id,
+            device_id: device.id,
+          })
+          .onConflict(["user_id", "device_id"])
+          .ignore();
+
+        console.log(
+          `➕ NEW USER: ${deviceUserId} (UID: ${nextUID}) -> DEVICE ${device.id}`,
+        );
+      } else {
+        // =========================
+        // USER SUDAH ADA
+        // JANGAN TIMPA DATA MASTER
+        // =========================
+
+        await db("device_users")
+          .insert({
+            user_id: existing.id,
+            device_id: device.id,
+          })
+          .onConflict(["user_id", "device_id"])
+          .ignore();
+
+        console.log(
+          `🔗 RELATION OK: USER ${existing.id} -> DEVICE ${device.id}`,
+        );
       }
     }
 
